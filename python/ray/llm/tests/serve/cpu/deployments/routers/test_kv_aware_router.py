@@ -49,6 +49,17 @@ def build_test_llm_config() -> LLMConfig:
         },
     )
 
+
+def get_kv_actor_names(app_name: str) -> list:
+    prefix = f"{SERVE_DEPLOYMENT_ACTOR_PREFIX}{app_name}::"
+    suffix = f"::{KV_ROUTER_ACTOR_NAME}"
+    return [
+        a["name"]
+        for a in list_actors(filters=[("state", "=", "ALIVE")])
+        if a["name"] and a["name"].startswith(prefix) and a["name"].endswith(suffix)
+    ]
+
+
 @pytest.fixture(autouse=True)
 def enable_direct_streaming(monkeypatch):
     monkeypatch.setattr(
@@ -56,6 +67,14 @@ def enable_direct_streaming(monkeypatch):
         "RAY_SERVE_LLM_ENABLE_DIRECT_STREAMING",
         True,
     )
+
+
+@pytest.fixture(scope="module")
+def serve_instance():
+    if not ray.is_initialized():
+        ray.init(address="auto")
+    yield
+    serve.shutdown()
 
 
 def test_build_openai_app_attaches_kv_actor():
@@ -72,24 +91,6 @@ def test_build_openai_app_attaches_kv_actor():
     assert actor_cfg.actor_options["num_cpus"] == 0
 
 
-@pytest.fixture(scope="module")
-def serve_instance():
-    if not ray.is_initialized():
-        ray.init(address="auto")
-    yield
-    serve.shutdown()
-
-
-def get_kv_actor_names(app_name: str) -> list:
-    prefix = f"{SERVE_DEPLOYMENT_ACTOR_PREFIX}{app_name}::"
-    suffix = f"::{KV_ROUTER_ACTOR_NAME}"
-    return [
-        a["name"]
-        for a in list_actors(filters=[("state", "=", "ALIVE")])
-        if a["name"] and a["name"].startswith(prefix) and a["name"].endswith(suffix)
-    ]
-
-
 def test_yaml_config_attaches_kv_actor(serve_instance):
     """Deploying a YAML config that selects KVAwareRouter creates the KVRouterActor."""
     config_file = os.path.join(
@@ -99,9 +100,7 @@ def test_yaml_config_attaches_kv_actor(serve_instance):
 
     subprocess.check_output(["serve", "deploy", config_file], stderr=subprocess.STDOUT)
     try:
-        wait_for_condition(
-            lambda: len(get_kv_actor_names(app_name)) == 1, timeout=60
-        )
+        wait_for_condition(lambda: len(get_kv_actor_names(app_name)) == 1, timeout=60)
     finally:
         serve.delete(app_name, _blocking=True)
 

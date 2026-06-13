@@ -11,8 +11,15 @@ KV_ROUTER_ACTOR_NAME = "serve_llm_kv_router"
 
 @ray.remote
 class KVRouterActor:
-    # TODO (jeffreywang): In subsequent PRs, KVRouterActor will host the global KV
-    # radix tree for KV-aware request scoring.
+    """Deployment-scoped Ray actor hosting the KV-aware router.
+
+    KVRouterActor, independent of any replica's lifetime, is attached to the LLMServer
+    deployment via Serve's DeploymentActorConfig. It exposes the KV-aware routing interfaces:
+    1. Replica membership tracking
+    2. KV-aware replica selection
+
+    TODO (jeffreywang): KVRouterActor should host the global KV radix tree for KV-aware request scoring.
+    """
 
     async def select_worker(
         self,
