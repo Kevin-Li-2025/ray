@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import List, Optional, TypedDict
 
 import ray
 from ray.serve._private.constants import SERVE_LOGGER_NAME
@@ -7,6 +7,19 @@ from ray.serve._private.constants import SERVE_LOGGER_NAME
 logger = logging.getLogger(SERVE_LOGGER_NAME)
 
 KV_ROUTER_ACTOR_NAME = "serve_llm_kv_router"
+
+
+class WorkerSelection(TypedDict):
+    """The worker chosen by ``KVRouterActor.select_worker`` for a request."""
+
+    # The chosen worker.
+    worker_id: int
+    # Data-parallel rank within the worker.
+    dp_rank: int
+    # KV blocks already cached on that worker.
+    overlap_blocks: int
+    # The worker's routing score.
+    score: float
 
 
 @ray.remote
@@ -26,7 +39,7 @@ class KVRouterActor:
         request_id: str,
         token_ids: List[int],
         allowed_worker_ids: List[int],
-    ) -> Dict[str, Any]:
+    ) -> WorkerSelection:
         """Score the allowed workers for a request based on KV-cache overlap and
         load and pick the best one.
 
@@ -36,11 +49,7 @@ class KVRouterActor:
             allowed_worker_ids: Candidate worker ids the router may select from.
 
         Returns:
-            A dict describing the selected worker:
-            ``worker_id`` (int): the chosen worker.
-            ``dp_rank`` (int): data-parallel rank within the worker.
-            ``overlap_blocks`` (int): KV blocks already cached on that worker.
-            ``score`` (float): the worker's routing score (higher is better).
+            The selected worker (see ``WorkerSelection``).
         """
         raise NotImplementedError("KVRouterActor.select_worker is not implemented")
 
